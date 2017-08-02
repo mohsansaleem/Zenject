@@ -389,9 +389,14 @@ namespace Zenject
         IEnumerable<ProviderPair> GetProvidersForContract(
             BindingId bindingId, InjectSources sourceType)
         {
-            FlushBindings();
+            var containers = GetAllContainersToLookup(sourceType);
 
-            return GetAllContainersToLookup(sourceType)
+            foreach (var container in containers)
+            {
+                container.FlushBindings();
+            }
+
+            return containers
                 .SelectMany(x => x.GetLocalProviderPairs(bindingId));
         }
 
