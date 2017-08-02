@@ -10,7 +10,7 @@ namespace Zenject
         // Make this lazy just as bit of extra assurance that we don't trigger circular dependencies
         // accidentally
         [Inject(Optional = true, Source = InjectSources.Parent)]
-        readonly Lazy<TickableManager> _parent = null;
+        readonly Lazy<List<TickableManager>> _parents = null;
 
         [Inject(Optional = true, Source = InjectSources.Local)]
         readonly List<ITickable> _tickables = null;
@@ -48,7 +48,7 @@ namespace Zenject
 
         public bool IsPaused
         {
-            get { return _isPaused || (_parent.Value != null ? _parent.Value.IsPaused : _isPaused); }
+            get { return _isPaused || (_parents.Value != null ? _parents.Value.Any(x => x.IsPaused) : _isPaused); }
         }
 
         [Inject]

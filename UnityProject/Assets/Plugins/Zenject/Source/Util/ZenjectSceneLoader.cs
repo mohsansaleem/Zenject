@@ -116,16 +116,16 @@ namespace Zenject
 
             if (containerMode == LoadSceneRelationship.None)
             {
-                SceneContext.ParentContainer = null;
+                SceneContext.ParentContainers = null;
             }
             else if (containerMode == LoadSceneRelationship.Child)
             {
-                SceneContext.ParentContainer = _sceneContainer;
+                SceneContext.ParentContainers = new DiContainer[] { _sceneContainer };
             }
             else
             {
                 Assert.IsEqual(containerMode, LoadSceneRelationship.Sibling);
-                SceneContext.ParentContainer = _sceneContainer.ParentContainer;
+                SceneContext.ParentContainers = _sceneContainer.ParentContainers;
             }
 
             SceneContext.ExtraBindingsInstallMethod = extraBindings;

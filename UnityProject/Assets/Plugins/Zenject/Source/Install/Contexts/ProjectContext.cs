@@ -161,7 +161,7 @@ namespace Zenject
 #endif
 
             _container = new DiContainer(
-                StaticContext.Container, isValidating);
+                new DiContainer[] { StaticContext.Container }, isValidating);
 
             foreach (var instance in GetInjectableMonoBehaviours().Cast<object>())
             {

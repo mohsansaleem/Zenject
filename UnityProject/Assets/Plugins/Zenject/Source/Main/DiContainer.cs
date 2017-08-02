@@ -30,7 +30,8 @@ namespace Zenject
         public const string DependencyRootIdentifier = "DependencyRoot";
 
         readonly Dictionary<BindingId, List<ProviderInfo>> _providers = new Dictionary<BindingId, List<ProviderInfo>>();
-        readonly DiContainer _parentContainer;
+        readonly List<DiContainer> _parentContainers = new List<DiContainer>();
+        readonly List<DiContainer> _ancestorContainers = new List<DiContainer>();
         readonly Stack<LookupId> _resolvesInProgress = new Stack<LookupId>();
 
         readonly SingletonProviderCreator _singletonProviderCreator;
@@ -91,19 +92,26 @@ namespace Zenject
         {
         }
 
-        public DiContainer(DiContainer parentContainer, bool isValidating)
+        public DiContainer(IEnumerable<DiContainer> parentContainers, bool isValidating)
             : this(isValidating)
         {
-            _parentContainer = parentContainer;
+            _parentContainers = parentContainers.ToList();
+            _ancestorContainers = FlattenInheritanceChain();
 
-            if (parentContainer != null)
+            if (!_parentContainers.IsEmpty())
             {
-                parentContainer.FlushBindings();
+                foreach (var parent in _parentContainers)
+                {
+                    parent.FlushBindings();
+                }
 
 #if !NOT_UNITY3D
-                DefaultParent = parentContainer.DefaultParent;
+                DefaultParent = _parentContainers.First().DefaultParent;
 #endif
-                foreach (var binding in parentContainer._childBindings)
+
+                // Make sure to avoid duplicates which could happen if a parent container
+                // appears multiple times in the inheritance chain
+                foreach (var binding in _parentContainers.SelectMany(x => x._childBindings).Distinct())
                 {
                     Assert.That(binding.CopyIntoAllSubContainers);
                     _currentBindings.Enqueue(binding);
@@ -113,8 +121,8 @@ namespace Zenject
             }
         }
 
-        public DiContainer(DiContainer parentContainer)
-            : this(parentContainer, false)
+        public DiContainer(IEnumerable<DiContainer> parentContainers)
+            : this(parentContainers, false)
         {
         }
 
@@ -146,9 +154,9 @@ namespace Zenject
         }
 #endif
 
-        public DiContainer ParentContainer
+        public IEnumerable<DiContainer> ParentContainers
         {
-            get { return _parentContainer; }
+            get { return _parentContainers; }
         }
 
         public bool ChecksForCircularDependencies
@@ -273,7 +281,7 @@ namespace Zenject
 
         DiContainer CreateSubContainer(bool isValidating)
         {
-            return new DiContainer(this, isValidating);
+            return new DiContainer(new DiContainer[] { this }, isValidating);
         }
 
         public void RegisterProvider(
@@ -306,49 +314,85 @@ namespace Zenject
                 .Where(x => x.ProviderInfo.Condition == null || x.ProviderInfo.Condition(context));
         }
 
-        IEnumerable<ProviderPair> GetProvidersForContract(BindingId bindingId, InjectSources sourceType)
+        IEnumerable<DiContainer> GetAllContainersToLookup(InjectSources sourceType)
         {
-            FlushBindings();
-
             switch (sourceType)
             {
                 case InjectSources.Local:
                 {
-                    return GetLocalProviders(bindingId).Select(x => new ProviderPair(x, this));
-                }
-                case InjectSources.Any:
-                {
-                    var localPairs = GetLocalProviders(bindingId).Select(x => new ProviderPair(x, this));
-
-                    if (_parentContainer == null)
-                    {
-                        return localPairs;
-                    }
-
-                    return localPairs.Concat(
-                        _parentContainer.GetProvidersForContract(bindingId, InjectSources.Any));
-                }
-                case InjectSources.AnyParent:
-                {
-                    if (_parentContainer == null)
-                    {
-                        return Enumerable.Empty<ProviderPair>();
-                    }
-
-                    return _parentContainer.GetProvidersForContract(bindingId, InjectSources.Any);
+                    yield return this;
+                    break;
                 }
                 case InjectSources.Parent:
                 {
-                    if (_parentContainer == null)
+                    foreach (var parent in _parentContainers)
                     {
-                        return Enumerable.Empty<ProviderPair>();
+                        yield return parent;
                     }
+                    break;
+                }
+                case InjectSources.Any:
+                {
+                    yield return this;
+                    foreach (var ancestor in _ancestorContainers)
+                    {
+                        yield return ancestor;
+                    }
+                    break;
+                }
+                case InjectSources.AnyParent:
+                {
+                    foreach (var ancestor in _ancestorContainers)
+                    {
+                        yield return ancestor;
+                    }
+                    break;
+                }
+                default:
+                {
+                    throw Assert.CreateException();
+                }
+            }
+        }
 
-                    return _parentContainer.GetProvidersForContract(bindingId, InjectSources.Local);
+        // Get the full list of ancestor Di Containers, making sure to avoid
+        // duplicates and also order them in a breadth-first way
+        List<DiContainer> FlattenInheritanceChain()
+        {
+            var processed = new List<DiContainer>();
+
+            var containerQueue = new Queue<DiContainer>();
+            containerQueue.Enqueue(this);
+
+            while (containerQueue.Count > 0)
+            {
+                var current = containerQueue.Dequeue();
+
+                foreach (var parent in current.ParentContainers)
+                {
+                    if (!processed.Contains(parent))
+                    {
+                        processed.Add(parent);
+                        containerQueue.Enqueue(parent);
+                    }
                 }
             }
 
-            throw Assert.CreateException("Invalid source type");
+            return processed;
+        }
+
+        IEnumerable<ProviderPair> GetLocalProviderPairs(BindingId bindingId)
+        {
+            return GetLocalProviders(bindingId).Select(x => new ProviderPair(x, this));
+        }
+
+        IEnumerable<ProviderPair> GetProvidersForContract(
+            BindingId bindingId, InjectSources sourceType)
+        {
+            FlushBindings();
+
+            return GetAllContainersToLookup(sourceType)
+                .SelectMany(x => x.GetLocalProviderPairs(bindingId));
         }
 
         List<ProviderInfo> GetLocalProviders(BindingId bindingId)
@@ -716,18 +760,29 @@ namespace Zenject
 
         int GetContainerHeirarchyDistance(DiContainer container)
         {
-            return GetContainerHeirarchyDistance(container, 0);
+            return GetContainerHeirarchyDistance(container, 0).Value;
         }
 
-        int GetContainerHeirarchyDistance(DiContainer container, int depth)
+        int? GetContainerHeirarchyDistance(DiContainer container, int depth)
         {
             if (container == this)
             {
                 return depth;
             }
 
-            Assert.IsNotNull(_parentContainer);
-            return _parentContainer.GetContainerHeirarchyDistance(container, depth + 1);
+            int? result = null;
+
+            foreach (var parent in _parentContainers)
+            {
+                var distance = parent.GetContainerHeirarchyDistance(container, depth + 1);
+
+                if (distance.HasValue && (!result.HasValue || distance.Value < result.Value))
+                {
+                    result = distance;
+                }
+            }
+
+            return result;
         }
 
         public IEnumerable<Type> GetDependencyContracts<TContract>()
@@ -757,7 +812,7 @@ namespace Zenject
                 || type.DerivesFrom<Context>()
 #endif
 #if !(UNITY_WSA && ENABLE_DOTNET && !UNITY_EDITOR)
-                || type.HasAttributeIncludingInterfaces<ZenjectAllowDuringValidationAttribute>()
+                || type.HasAttribute<ZenjectAllowDuringValidationAttribute>()
 #endif
             ;
         }

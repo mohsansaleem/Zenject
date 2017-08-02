@@ -16,7 +16,7 @@ namespace Zenject
     {
         public static Action<DiContainer> ExtraBindingsInstallMethod;
 
-        public static DiContainer ParentContainer;
+        public static IEnumerable<DiContainer> ParentContainers;
 
         [FormerlySerializedAs("ParentNewObjectsUnderRoot")]
         [Tooltip("When true, objects that are created at runtime will be parented to the SceneContext")]
@@ -27,9 +27,13 @@ namespace Zenject
         [SerializeField]
         List<string> _contractNames = new List<string>();
 
-        [Tooltip("Optional contract name of a SceneContext in a previously loaded scene that this context depends on and to which it must be parented")]
+        [Tooltip("Note: This field is deprecated!  It will be removed in future versions.")]
         [SerializeField]
         string _parentContractName;
+
+        [Tooltip("Optional contract names of SceneContexts in previously loaded scenes that this context depends on and to which it should be parented")]
+        [SerializeField]
+        List<string> _parentContractNames = new List<string>();
 
         [Tooltip("When false, wait until run method is explicitly called. Otherwise run on awake")]
         [SerializeField]
@@ -72,12 +76,24 @@ namespace Zenject
             }
         }
 
-        public string ParentContractName
+        public IEnumerable<string> ParentContractNames
         {
-            get { return _parentContractName; }
+            get
+            {
+                var result = new List<string>();
+
+                if (!string.IsNullOrEmpty(_parentContractName))
+                {
+                    result.Add(_parentContractName);
+                }
+
+                result.AddRange(_parentContractNames);
+                return result;
+            }
             set
             {
-                _parentContractName = value;
+                _parentContractName = null;
+                _parentContractNames = value.ToList();
             }
         }
 
@@ -87,8 +103,19 @@ namespace Zenject
             set { _parentNewObjectsUnderRoot = value; }
         }
 
+        void CheckParentContractName()
+        {
+            if (!string.IsNullOrEmpty(_parentContractName))
+            {
+                Debug.LogWarning(
+                    "Field 'Parent Contract Name' is now deprecated! Please migrate to using the collection 'Parent Contract Names' instead on scene context '{0}'".Fmt(this.name));
+            }
+        }
+
         public void Awake()
         {
+            CheckParentContractName();
+
             // We always want to initialize ProjectContext as early as possible
             ProjectContext.Instance.EnsureIsInitialized();
 
@@ -108,6 +135,7 @@ namespace Zenject
         {
             Assert.That(IsValidating);
 
+            CheckParentContractName();
             Install();
             Resolve();
 
@@ -127,47 +155,44 @@ namespace Zenject
             return ZenUtilInternal.GetRootGameObjects(gameObject.scene);
         }
 
-        DiContainer GetParentContainer()
+        IEnumerable<DiContainer> GetParentContainers()
         {
-            if (string.IsNullOrEmpty(_parentContractName))
+            var parentContractNames = ParentContractNames;
+
+            if (parentContractNames.IsEmpty())
             {
-                if (ParentContainer != null)
+                if (ParentContainers != null)
                 {
-                    var tempParentContainer = ParentContainer;
+                    var tempParentContainer = ParentContainers;
 
                     // Always reset after using it - it is only used to pass the reference
                     // between scenes via ZenjectSceneLoader
-                    ParentContainer = null;
+                    ParentContainers = null;
 
                     return tempParentContainer;
                 }
 
-                return ProjectContext.Instance.Container;
+                return new DiContainer[] { ProjectContext.Instance.Container };
             }
 
-            Assert.IsNull(ParentContainer,
+            Assert.IsNull(ParentContainers,
                 "Scene cannot have both a parent scene context name set and also an explicit parent container given");
 
-            var sceneContexts = UnityUtil.AllLoadedScenes
+            var parentContainers = UnityUtil.AllLoadedScenes
                 .Except(gameObject.scene)
                 .SelectMany(scene => scene.GetRootGameObjects())
                 .SelectMany(root => root.GetComponentsInChildren<SceneContext>())
-                .Where(sceneContext => sceneContext.ContractNames.Contains(_parentContractName))
+                .Where(sceneContext => sceneContext.ContractNames.Where(x => parentContractNames.Contains(x)).Any())
+                .Select(x => x.Container)
                 .ToList();
 
-            Assert.That(sceneContexts.Any(), () => string.Format(
-                "SceneContext on object {0} of scene {1} requires contract {2}, but none of the loaded SceneContexts implements that contract.",
+            Assert.That(parentContainers.Any(), () => string.Format(
+                "SceneContext on object {0} of scene {1} requires at least one of contracts '{2}', but none of the loaded SceneContexts implements that contract.",
                 gameObject.name,
                 gameObject.scene.name,
-                _parentContractName));
+                parentContractNames.Join(", ")));
 
-            Assert.That(sceneContexts.Count == 1, () => string.Format(
-                "SceneContext on object {0} of scene {1} requires a single implementation of contract {2}, but multiple were found.",
-                gameObject.name,
-                gameObject.scene.name,
-                _parentContractName));
-
-            return sceneContexts.Single().Container;
+            return parentContainers;
         }
 
         List<SceneDecoratorContext> LookupDecoratorContexts()
@@ -195,7 +220,12 @@ namespace Zenject
             _hasInstalled = true;
 
             Assert.IsNull(_container);
-            _container = GetParentContainer().CreateSubContainer();
+
+            var parents = GetParentContainers();
+            Assert.That(!parents.IsEmpty());
+            Assert.That(parents.All(x => x.IsValidating == parents.First().IsValidating));
+
+            _container = new DiContainer(parents, parents.First().IsValidating);
 
             Assert.That(_decoratorContexts.IsEmpty());
             _decoratorContexts.AddRange(LookupDecoratorContexts());
