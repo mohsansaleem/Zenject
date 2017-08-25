@@ -173,7 +173,7 @@ public class TestLogger : ZenjectUnitTestFixture
 }
 ```
 
-### Integration Testss
+### Integration Tests
 
 Integration tests, on the other hand, are executed in a similar environment to the scenes in your project.  Unlike ZenjectUnitTestFixture, a `SceneContext` and `ProjectContext` are created for each test, so your code will run in similar way that it would normally.  For example, any bindings to IInitializable and IDisposable will be executed how you expect.
 
