@@ -76,11 +76,17 @@ class Runner:
         self._sys.createDirectory('[TempDir]')
 
         try:
+            self._buildUsageDll()
+            # Do this first because it is the thing that usually breaks
+            self._createNonUnityZip('[DistDir]/Zenject-NonUnity@v{0}.zip'.format(versionStr))
             self._createCSharpPackage(True, '[DistDir]/Zenject-WithSampleGames@v{0}.unitypackage'.format(versionStr))
             self._createCSharpPackage(False, '[DistDir]/Zenject@v{0}.unitypackage'.format(versionStr))
-            self._createNonUnityZip('[DistDir]/Zenject-NonUnity@v{0}.zip'.format(versionStr))
         finally:
             self._sys.deleteDirectory('[TempDir]')
+
+    def _buildUsageDll(self):
+        self._log.heading('Building Zenject-usage.dll')
+        self._vsSolutionHelper.buildVisualStudioProject('[RootDir]/AssemblyBuild/Zenject-usage/Zenject-usage.sln', 'Release')
 
     def _createNonUnityZip(self, zipPath):
 
@@ -93,10 +99,13 @@ class Runner:
         binDir = '[BinDir]/Release'
         self._sys.deleteDirectoryIfExists(binDir)
         self._sys.createDirectory(binDir)
+        self._log.info('Building non unity Zenject solution')
         self._vsSolutionHelper.buildVisualStudioProject('[RootDir]/NonUnityBuild/Zenject.sln', 'Release')
 
         self._log.info('Copying Zenject dlls')
         self._sys.copyFile('{0}/Zenject.dll'.format(binDir), '{0}/Zenject.dll'.format(tempDir))
+        self._sys.copyFile('{0}/Zenject-Signals.dll'.format(binDir), '{0}/Zenject-Signals.dll'.format(tempDir))
+        self._sys.copyFile('[ZenjectDir]/Source/Usage/Zenject-usage.dll', '{0}/Zenject-usage.dll'.format(tempDir))
 
         self._zipHelper.createZipFile(tempDir, zipPath)
 
@@ -145,7 +154,7 @@ def installBindings():
 
     config = {
         'PathVars': {
-            'UnityExePath': 'C:/Utils/Unity/Unity2017.1.1f1/Editor/Unity.exe',
+            'UnityExePath': 'D:/Utils/Unity/Installs/2018.1.0f2/Editor/Unity.exe',
             'LogPath': os.path.join(BuildDir, 'Log.txt'),
             'MsBuildExePath': 'C:/Windows/Microsoft.NET/Framework/v4.0.30319/msbuild.exe'
         },

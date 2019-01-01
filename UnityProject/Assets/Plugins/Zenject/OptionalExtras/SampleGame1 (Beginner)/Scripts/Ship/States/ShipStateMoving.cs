@@ -1,8 +1,6 @@
 using System;
-using UnityEngine;
-using System.Collections;
-using Zenject;
 using ModestTree;
+using UnityEngine;
 
 namespace Zenject.Asteroids
 {
@@ -49,7 +47,12 @@ namespace Zenject.Asteroids
             var speed = (_ship.Position - _lastPosition).magnitude / Time.deltaTime;
             var speedPx = Mathf.Clamp(speed / _settings.speedForMaxEmisssion, 0.0f, 1.0f);
 
+#if UNITY_2018
+            var emission = _ship.ParticleEmitter.emission;
+            emission.rateOverTime = _settings.maxEmission * speedPx;
+#else
             _ship.ParticleEmitter.maxEmission = _settings.maxEmission * speedPx;
+#endif
         }
 
         void Move()
@@ -74,12 +77,13 @@ namespace Zenject.Asteroids
         public override void Start()
         {
             _lastPosition = _ship.Position;
-            _ship.ParticleEmitter.emit = true;
+
+            _ship.ParticleEmitter.gameObject.SetActive(true);
         }
 
         public override void Dispose()
         {
-            _ship.ParticleEmitter.emit = false;
+            _ship.ParticleEmitter.gameObject.SetActive(false);
         }
 
         public override void OnTriggerEnter(Collider other)
@@ -101,7 +105,7 @@ namespace Zenject.Asteroids
             public float oscillationAmplitude;
         }
 
-        public class Factory : Factory<ShipStateMoving>
+        public class Factory : PlaceholderFactory<ShipStateMoving>
         {
         }
     }
