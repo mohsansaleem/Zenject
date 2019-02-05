@@ -79,7 +79,7 @@ public class GameInstaller : MonoInstaller<GameInstaller>
 }
 ```
 
-To run, just create copy and paste the code above into a new file named `GameInstaller` then create an empty scene with a new scene context and attach the new installer.
+To run, just copy and paste the code above into a new file named `GameInstaller` then create an empty scene with a new scene context and attach the new installer.
 
 There are several ways of creating signal handlers.  Another approach would be the following
 

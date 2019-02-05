@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 
 using System.Collections;
 using ModestTree;
@@ -100,4 +99,3 @@ namespace Zenject.Tests.Bindings
     }
 }
 
-#endif

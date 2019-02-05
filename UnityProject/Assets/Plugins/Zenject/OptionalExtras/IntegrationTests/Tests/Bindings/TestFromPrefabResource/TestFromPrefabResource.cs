@@ -1,5 +1,4 @@
-﻿#if UNITY_EDITOR
-
+﻿
 using System.Collections;
 using ModestTree;
 using UnityEngine.TestTools;
@@ -178,4 +177,3 @@ namespace Zenject.Tests.Bindings
     }
 }
 
-#endif

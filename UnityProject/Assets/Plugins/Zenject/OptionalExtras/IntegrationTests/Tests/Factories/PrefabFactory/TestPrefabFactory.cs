@@ -1,6 +1,4 @@
-﻿#if UNITY_EDITOR
-
-using System.Collections;
+﻿using System.Collections;
 using ModestTree;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -162,5 +160,3 @@ namespace Zenject.Tests.Factories
         }
     }
 }
-
-#endif

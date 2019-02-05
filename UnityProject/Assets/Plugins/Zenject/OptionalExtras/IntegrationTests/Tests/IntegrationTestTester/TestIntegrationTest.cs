@@ -1,5 +1,3 @@
-#if UNITY_EDITOR
-
 using System;
 using System.Collections;
 using ModestTree;
@@ -74,5 +72,3 @@ namespace Zenject.Tests
         }
     }
 }
-
-#endif

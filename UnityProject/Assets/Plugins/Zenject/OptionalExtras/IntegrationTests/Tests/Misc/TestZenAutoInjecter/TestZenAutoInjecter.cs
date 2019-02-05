@@ -2,13 +2,10 @@ using System.Collections;
 using System.Linq;
 using ModestTree;
 using UnityEngine;
-#if UNITY_EDITOR
 using UnityEngine.TestTools;
-#endif
 
 namespace Zenject.Tests.AutoInjecter
 {
-#if UNITY_EDITOR
     public class TestZenAutoInjecter : ZenjectIntegrationTestFixture
     {
         GameObject GetPrefab(string name)
@@ -132,6 +129,5 @@ namespace Zenject.Tests.AutoInjecter
             Assert.IsEqual(qux.Container, ProjectContext.Instance.Container);
         }
     }
-#endif
 }
 

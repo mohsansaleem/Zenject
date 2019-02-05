@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 
 using System.Collections;
 using System.Collections.Generic;
@@ -69,7 +68,7 @@ namespace Zenject.Tests.Bindings
         [UnityTest]
         public IEnumerator RunTestSingleMatchOptional3()
         {
-            var foo = new GameObject().AddComponent<FooOptional2>();
+            new GameObject().AddComponent<FooOptional2>();
 
             PreInstall();
 
@@ -243,4 +242,3 @@ namespace Zenject.Tests.Bindings
     }
 }
 
-#endif
